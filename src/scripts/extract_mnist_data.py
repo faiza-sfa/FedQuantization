@@ -1,0 +1,17 @@
+import os
+import sys
+
+# Insert 'dissertation' directory so that we can resolve the src imports.
+src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
+sys.path.insert(0, src_path)
+from src import DATA_PATH, FEDPROX_PATH
+from src.scripts.make_data_utils import make_data
+
+def extract_mnist_data():
+    mnist_in_dir = os.path.join(FEDPROX_PATH, f"mnist")
+    mnist_out_dir = os.path.join(DATA_PATH, f'mnist')
+    make_data(mnist_in_dir, mnist_out_dir)
+    os.chdir(os.path.dirname(__file__))
+
+if __name__ == "__main__":
+    extract_mnist_data()
