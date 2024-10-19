@@ -1,0 +1,173 @@
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import pandas as pd
+import numpy as np
+import seaborn as sns
+from matplotlib.colors import Normalize, ListedColormap
+
+def scatterplot_3d(data=None, *, x=None, y=None, z=None, hue=None, size=None, style=None, 
+                   palette=None, hue_order=None, hue_norm=None, sizes=None, size_order=None, 
+                   size_norm=None, markers=True, style_order=None, legend='auto', ax=None, 
+                   figsize=(10, 8), alpha=0.8, azim=-60, elev=30, **kwargs):
+    
+    """
+    3D scatter plot with seaborn-like interface using matplotlib, including viewing angles.
+    
+    Parameters:
+    -----------
+    data : pd.DataFrame
+        The dataframe containing the data.
+    x, y, z : str
+        Column names for the x, y, and z axes.
+    hue : str, optional
+        Column name for the color of the points.
+    size : str, optional
+        Column name for the size of the points.
+    style : str, optional
+        Column name for the style (marker shape) of the points.
+    palette : dict, list, or seaborn color palette, optional
+        Colors to use for the hue variable.
+    hue_order : list, optional
+        Order to plot the hue levels.
+    hue_norm : tuple, optional
+        Normalization range for the hue variable (vmin, vmax).
+    sizes : tuple, optional
+        Min and max size for point scaling (e.g. (20, 200)).
+    size_order : list, optional
+        Order of levels to map size values.
+    size_norm : tuple, optional
+        Normalization range for the size variable.
+    markers : bool or dict, optional
+        Marker style for the points. Can be a bool (True for default markers), or a dict mapping 
+        levels of the style variable to specific marker styles.
+    style_order : list, optional
+        Order to plot the style variable levels.
+    legend : str, optional
+        Whether to include a legend ('auto', 'brief', 'full', or False).
+    ax : matplotlib Axes, optional
+        Pre-existing axes for the plot. Otherwise, a new figure and axes are created.
+    figsize : tuple, optional
+        Figure size, default is (10, 8).
+    alpha : float, optional
+        Transparency level for points, default is 0.8.
+    azim: float, optional
+        Azimuthal angle, i.e, rotation around the z-axis, default is -60.
+    elev: float, optional
+        Elevation angle, i.e, height above the xy-plane, default is 30.
+    **kwargs : keyword arguments
+        Additional arguments passed to the scatter plot.
+        
+    Returns:
+    --------
+    fig, ax : matplotlib figure and axes objects.
+    """
+    
+    # Create a new figure and 3D axis if ax is not provided
+    if ax is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111, projection='3d')
+    else:
+        fig = ax.get_figure()
+
+    # Set the viewing angle
+    ax.view_init(elev=elev, azim=azim)
+
+    # Extract x, y, z data from the DataFrame
+    x_data = data[x]
+    y_data = data[y]
+    z_data = data[z]
+    
+    # Handle hue (color mapping)
+    if hue:
+        hue_data = data[hue]
+        if pd.api.types.is_numeric_dtype(hue_data):
+            # If hue is continuous (numeric)
+            norm = hue_norm or (hue_data.min(), hue_data.max())
+            if palette is None:
+                palette = sns.color_palette("viridis", as_cmap=True)
+            cmap = plt.get_cmap(palette) if isinstance(palette, str) else palette
+            colors = cmap(Normalize(*norm)(hue_data))
+        else:
+            # If hue is categorical
+            unique_hue = hue_order if hue_order else hue_data.unique()
+            if palette is None:
+                palette = sns.color_palette(n_colors=len(unique_hue))
+            elif isinstance(palette, str):
+                palette = sns.color_palette(palette, n_colors=len(unique_hue))
+            elif isinstance(palette, list):
+                palette = sns.color_palette(palette, n_colors=len(unique_hue))
+            hue_palette = dict(zip(unique_hue, palette))
+            colors = hue_data.map(hue_palette)
+    else:
+        colors = np.full(len(data), 'b')  # Default color (array)
+
+    # Handle size (point size mapping)
+    if size:
+        size_data = data[size]
+        if sizes is None:
+            sizes = (20, 200)  # Default range for sizes
+        if size_norm:
+            size_norm_func = Normalize(vmin=size_norm[0], vmax=size_norm[1])
+        else:
+            size_norm_func = Normalize(vmin=size_data.min(), vmax=size_data.max())
+        sizes = size_norm_func(size_data) * (sizes[1] - sizes[0]) + sizes[0]
+    else:
+        sizes = np.full(len(data), 20)  # Default size (array)
+
+    # Handle style (marker style mapping)
+    if style:
+        style_data = data[style]
+        unique_styles = style_order if style_order else style_data.unique()
+        if markers is True:
+            markers = ['o', '^', 's', 'P', 'D', '*', 'X']  # Default marker set
+        elif isinstance(markers, dict):
+            pass  # Use custom markers if provided
+        else:
+            raise ValueError("`markers` should be True, False, or a dictionary of styles.")
+        
+        if isinstance(markers, list):
+            marker_map = dict(zip(unique_styles, markers))
+        else:
+            marker_map = markers
+        marker_list = style_data.map(marker_map).fillna('o')
+    else:
+        marker_list = np.full(len(data), 'o')  # Default marker style
+
+    # Create the scatter plot
+    plotted_handles = []
+    plotted_labels = []
+    
+    for marker_style in pd.unique(marker_list):
+        for unique_hue in pd.unique(hue_data):
+            mask = (marker_list == marker_style) & (hue_data == unique_hue)
+            label = unique_hue if mask.any() else None
+            
+            scatter = ax.scatter(x_data[mask], y_data[mask], z_data[mask],
+                                 c=np.array(colors)[mask],
+                                 s=np.array(sizes)[mask],
+                                 marker=marker_style, alpha=alpha, label=label, **kwargs)
+            
+            if label and label not in plotted_labels:
+                plotted_handles.append(scatter)
+                plotted_labels.append(label)
+
+    # If hue is provided, add color bar for continuous or legend for categorical
+    if hue:
+        if pd.api.types.is_numeric_dtype(hue_data):
+            norm = Normalize(vmin=hue_data.min(), vmax=hue_data.max())
+            sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+            sm.set_array([])
+            fig.colorbar(sm, ax=ax, label=hue)
+        elif legend != False:
+            # Plot legend for categorical hue
+            ax.legend(plotted_handles, plotted_labels, loc='best', title=hue)
+
+    # Set axis labels
+    ax.set_xlabel(x)
+    ax.set_ylabel(y)
+    ax.set_zlabel(z)
+
+    plt.tight_layout()
+
+    plt.show()
+    return fig, ax
