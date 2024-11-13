@@ -6,9 +6,14 @@ from load_dataset import Dataset
 import os
 import sys
 import time
+import torch.nn as nn
+
+import torch.optim as optim
+import torchvision
+import torchvision.transforms as transforms
 
 
-class MNIST_PAQ_COMP:
+class CIFAR_PAQ_COMP:
 	def __init__(self, cmp, filename="saved_models", number_of_clients=1, aggregate_epochs=10, local_epochs=5, precision=7, r=1.0):
 		self.model = None
 		self.criterion = torch.nn.CrossEntropyLoss()
@@ -22,22 +27,51 @@ class MNIST_PAQ_COMP:
 		self.compression_ratio = 0
 		self.cmp=cmp
 
+               # Output: 10 classes
+
+	# def define_model(self):
+	# 	self.model = torch.nn.Sequential(
+	# 		torch.nn.Conv2d(3, 2, kernel_size=5),
+	# 		torch.nn.ReLU(),
+	# 		torch.nn.Conv2d(2, 4, kernel_size=7),
+	# 		torch.nn.ReLU(),
+	# 		torch.nn.Flatten(),
+	# 		torch.nn.Linear(1296, 512),
+	# 		torch.nn.ReLU(),
+	# 		torch.nn.Linear(512, 128),
+	# 		torch.nn.ReLU(),
+	# 		torch.nn.Linear(128, 32),
+	# 		torch.nn.ReLU(),
+	# 		torch.nn.Linear(32, 10),
+	# 		torch.nn.Softmax(dim=1),
+	# 	)		
+
 	def define_model(self):
-		self.model = torch.nn.Sequential(
-			torch.nn.Conv2d(1, 2, kernel_size=5),
-			torch.nn.ReLU(),
-			torch.nn.Conv2d(2, 4, kernel_size=7),
-			torch.nn.ReLU(),
-			torch.nn.Flatten(),
-			torch.nn.Linear(1296, 512),
-			torch.nn.ReLU(),
-			torch.nn.Linear(512, 128),
-			torch.nn.ReLU(),
-			torch.nn.Linear(128, 32),
-			torch.nn.ReLU(),
-			torch.nn.Linear(32, 10),
-			torch.nn.Softmax(dim=1),
-		)		
+		self.model = nn.Sequential(
+			nn.Conv2d(3, 32, kernel_size=3, padding=1),   # Input: 3x32x32, Output: 32x32x32
+			nn.ReLU(),
+			nn.MaxPool2d(2, 2),                           # Output: 32x16x16
+
+			nn.Conv2d(32, 64, kernel_size=3, padding=1),  # Input: 32x16x16, Output: 64x16x16
+			nn.ReLU(),
+			nn.MaxPool2d(2, 2),                           # Output: 64x8x8
+
+			nn.Flatten(),                                 # Flatten to 64 * 8 * 8 = 4096
+			nn.Linear(64 * 8 * 8, 512),                   # Fully connected layer, Output: 512
+			nn.ReLU(),
+			nn.Linear(512, 10),                            # Output layer, Output: 10 (for 10 classes)
+			# nn.Softmax(dim=1),
+			
+		)
+
+	# def define_model(self):
+	# 	# Load a pre-defined VGG model (e.g., VGG11) from torchvision
+	# 	self.model = torchvision.models.vgg11_bn(pretrained=True)  # VGG-11 with batch normalization
+		
+	# 	# Modify the classifier part to match CIFAR-10 output classes
+	# 	self.model.classifier[6] = nn.Linear(4096, 10)  # Adjust final layer for 10 classes
+
+
 
 	def get_weights_custom(self, dtype=np.float32):
         
@@ -69,13 +103,6 @@ class MNIST_PAQ_COMP:
 			except:
 				continue
 		self.compression_ratio = ((start_size-end_size)/start_size)*100
-
-
-
-		# return np.array(weights),start_size,end_size
-		# weights_array = [np.array(w, dtype=object) for w in weights]
-		# return weights_array,start_size,end_size
-		# print("weights", weights)
 		return weights,start_size,end_size
 
 
@@ -120,6 +147,7 @@ class MNIST_PAQ_COMP:
 
 
 
+
 	def client_generator(self, train_x, train_y):
 		number_of_clients = self.number_of_clients
 		size = train_y.shape[0]//number_of_clients
@@ -139,12 +167,11 @@ class MNIST_PAQ_COMP:
 			running_loss = 0
 			for batch_x, target in zip(dataset['x'], dataset['y']):
 				output = self.model(batch_x)
-
+				# output = torch.argmax(output, dim=1)
 				# print('output.shape:',output.shape)
 				# print('target.shape:', target.shape)
 				# print('output:',output)
 				# print('target:', target)
-				
 				loss = self.criterion(output, target)
 				self.optimizer.zero_grad()
 				loss.backward()
@@ -200,7 +227,7 @@ class MNIST_PAQ_COMP:
 
 
 
-class MNIST_PAQ_COMP_ADAPTIVE:
+class CIFAR_PAQ_COMP_ADAPTIVE:
 	def __init__(self, cmp_list, filename="saved_models", number_of_clients=1, aggregate_epochs=10, local_epochs=5, precision=7, r=1.0):
 		
 		np.random.seed(786)
@@ -463,5 +490,3 @@ class MNIST_PAQ_COMP_ADAPTIVE:
 	
 	def get_acc(self):
 		return self.test_acc
-
-	
